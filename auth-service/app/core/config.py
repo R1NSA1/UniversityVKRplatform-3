@@ -15,7 +15,9 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USER)
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "true").lower() == "true"
 EMAIL_USE_STARTTLS = os.getenv("EMAIL_USE_STARTTLS", "false").lower() == "true"
-LOGIN_CODE_EMAIL_SUBJECT = os.getenv("LOGIN_CODE_EMAIL_SUBJECT", "Your VKR login code")
+LOGIN_CODE_EMAIL_SUBJECT = os.getenv("LOGIN_CODE_EMAIL_SUBJECT", "Код входа в платформу ВКР")
+# Пока false — код только на экране (debug_code), без вызова email-service
+SEND_EMAIL_CODES = os.getenv("SEND_EMAIL_CODES", "false").lower() == "true"
 
 
 def access_token_ttl() -> timedelta:

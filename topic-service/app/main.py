@@ -1,10 +1,10 @@
 from fastapi import FastAPI
-from app.routers import topics
-from app.main import appcd topic-service
 
+from app.routers import topics
 
 app = FastAPI(title="Topic Service", description="Управление темами ВКР и заявками")
 app.include_router(topics.router)
+
 
 @app.get("/health")
 def health():

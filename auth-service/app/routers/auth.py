@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.config import LOGIN_CODE_TTL_MINUTES, LOG_LOGIN_CODE, SHOW_LOGIN_CODE, access_token_ttl
+from app.core.config import (
+    LOGIN_CODE_TTL_MINUTES,
+    LOG_LOGIN_CODE,
+    SEND_EMAIL_CODES,
+    SHOW_LOGIN_CODE,
+    access_token_ttl,
+)
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models import LoginCode, User
@@ -82,18 +88,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     db.commit()
     db.refresh(login_code)
 
-    email_sent = send_login_code_email(user.email, code)
+    email_mode = "local"
+    if SEND_EMAIL_CODES:
+        _, email_mode = send_login_code_email(user.email, code)
     if LOG_LOGIN_CODE:
         logger.info("Debug login code for %s: %s", user.email, code)
 
     return LoginResponse(
-        message=(
-            "Login code created. "
-            f"SMTP delivery status: {'sent' if email_sent else 'not sent'}. "
-            "Debug code is also returned for local testing."
-        ),
+        message="Код входа создан. Введите код с экрана ниже.",
         code_expires_at=login_code.expires_at,
         debug_code=code if SHOW_LOGIN_CODE else None,
+        email_mode=email_mode,
     )
 
 

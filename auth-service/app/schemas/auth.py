@@ -42,6 +42,7 @@ class LoginResponse(BaseModel):
     message: str
     code_expires_at: datetime
     debug_code: str | None = None
+    email_mode: str = "test"  # smtp | test | error
 
 
 class VerifyResponse(BaseModel):

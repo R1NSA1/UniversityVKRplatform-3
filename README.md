@@ -46,6 +46,14 @@
     docker compose exec postgres psql -U postgres -d vkr_main -c "\dt"
     # Должна быть хотя бы таблица alembic_version.
 
+## Миграции topic-таблиц
+
+Таблицы `topics` и `applications` создаются миграцией auth-service (общая БД):
+
+```bash
+docker compose exec auth-service alembic -c /app/alembic.ini upgrade head
+```
+
 ## Полезные команды
 
 1. Alembic (миграции БД):

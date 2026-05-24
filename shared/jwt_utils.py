@@ -52,3 +52,58 @@ def get_role_from_token(token: str) -> Optional[str]:
     if payload:
         return payload.get("role")
     return None
+
+
+def get_current_user_payload(token: str) -> Optional[Dict[str, Any]]:
+    payload = verify_token(token)
+    if not payload:
+        return None
+    return {
+        "id": payload.get("sub"),
+        "email": payload.get("email"),
+        "role": payload.get("role"),
+    }
+
+
+def get_current_user_dependency():
+    """FastAPI dependency factory — проверяет Bearer JWT и возвращает payload пользователя."""
+    from fastapi import Depends, HTTPException, status
+    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+    bearer_scheme = HTTPBearer(auto_error=False)
+
+    def _get_current_user(
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    ) -> Dict[str, Any]:
+        if credentials is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Access token is required")
+
+        user = get_current_user_payload(credentials.credentials)
+        if not user or not user.get("id"):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        return user
+
+    return _get_current_user
+
+
+get_current_user = get_current_user_dependency()
+
+
+def get_optional_current_user_dependency():
+    """Как get_current_user, но без токена возвращает None (для публичных списков)."""
+    from fastapi import Depends
+    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+    bearer_scheme = HTTPBearer(auto_error=False)
+
+    def _get_optional_current_user(
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    ) -> Optional[Dict[str, Any]]:
+        if credentials is None:
+            return None
+        return get_current_user_payload(credentials.credentials)
+
+    return _get_optional_current_user
+
+
+get_optional_current_user = get_optional_current_user_dependency()

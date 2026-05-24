@@ -30,7 +30,10 @@ class Application(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     student_id = Column(String, nullable=False)
     topic_id = Column(String, ForeignKey("topics.id"), nullable=False)
-    status = Column(Enum(ApplicationStatus), default=ApplicationStatus.CREATED)
+    status = Column(
+        Enum(ApplicationStatus, name="application_status", values_callable=lambda x: [e.value for e in x]),
+        default=ApplicationStatus.CREATED,
+    )
     student_code = Column(String(10), nullable=False)
     teacher_code = Column(String(10), nullable=False)
     student_confirmed_at = Column(DateTime(timezone=True), nullable=True)

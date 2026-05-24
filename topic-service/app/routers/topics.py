@@ -3,10 +3,21 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from ..database import get_db
 from ..models import Topic, Application, ApplicationStatus
-from ..schemas import TopicCreate, TopicResponse, ApplicationCreate, ApplicationResponse
-from shared.jwt_utils import get_current_user
+from ..schemas import (
+    TopicCreate,
+    TopicResponse,
+    ApplicationCreate,
+    ApplicationResponse,
+    TeacherApplicationResponse,
+)
+from shared.jwt_utils import get_current_user, get_optional_current_user
+import logging
+import os
 import random
 import string
+
+logger = logging.getLogger(__name__)
+SEND_EMAIL_CODES = os.getenv("SEND_EMAIL_CODES", "false").lower() == "true"
 
 router = APIRouter(prefix="/api/topic", tags=["topics"])
 
@@ -32,9 +43,36 @@ def create_topic(
     return new_topic
 
 @router.get("/topics", response_model=list[TopicResponse])
-def list_topics(db: Session = Depends(get_db)):
+def list_topics(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_current_user),
+):
     topics = db.query(Topic).filter(Topic.status == "active").all()
-    return topics
+    taken_topic_ids = {
+        row[0]
+        for row in db.query(Application.topic_id)
+        .filter(Application.status != ApplicationStatus.REJECTED)
+        .distinct()
+        .all()
+    }
+    my_apps_by_topic: dict[str, Application] = {}
+    if current_user and current_user.get("role") == "student":
+        student_id = str(current_user.get("id"))
+        for app in db.query(Application).filter(Application.student_id == student_id).all():
+            my_apps_by_topic[app.topic_id] = app
+
+    result: list[TopicResponse] = []
+    for topic in topics:
+        payload = TopicResponse.model_validate(topic)
+        payload.is_taken = topic.id in taken_topic_ids
+        my_app = my_apps_by_topic.get(topic.id)
+        if my_app:
+            payload.my_application_status = (
+                my_app.status.value if hasattr(my_app.status, "value") else str(my_app.status)
+            )
+            payload.my_application_id = my_app.id
+        result.append(payload)
+    return result
 
 @router.get("/topics/{topic_id}", response_model=TopicResponse)
 def get_topic(topic_id: str, db: Session = Depends(get_db)):
@@ -71,7 +109,49 @@ def create_application(
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
+
+    if SEND_EMAIL_CODES:
+        from ..utils.email_notify import get_user_email, notify_application_codes
+
+        student_email = current_user.get("email") or get_user_email(db, str(current_user.get("id")))
+        teacher_email = get_user_email(db, topic.teacher_id)
+        notify_application_codes(
+            topic_title=topic.title,
+            student_email=student_email,
+            teacher_email=teacher_email,
+            student_code=student_code,
+            teacher_code=teacher_code,
+        )
+
     return new_app
+
+@router.get("/teachers/me/applications", response_model=list[TeacherApplicationResponse])
+def list_teacher_applications(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if current_user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Только преподаватель")
+    teacher_id = str(current_user.get("id"))
+    rows = (
+        db.query(Application, Topic)
+        .join(Topic, Application.topic_id == Topic.id)
+        .filter(Topic.teacher_id == teacher_id)
+        .order_by(Application.created_at.desc())
+        .all()
+    )
+    return [
+        TeacherApplicationResponse(
+            id=app.id,
+            topic_id=app.topic_id,
+            topic_title=topic.title,
+            student_id=app.student_id,
+            status=app.status.value if hasattr(app.status, "value") else str(app.status),
+            teacher_code=app.teacher_code,
+        )
+        for app, topic in rows
+    ]
+
 
 @router.post("/confirm")
 def confirm_code(
@@ -92,8 +172,11 @@ def confirm_code(
     elif role == "teacher":
         if app.teacher_code != code:
             raise HTTPException(status_code=400, detail="Неверный код")
-        app.status = ApplicationStatus.TEACHER_CONFIRMED
         app.teacher_confirmed_at = func.now()
+        if app.status == ApplicationStatus.STUDENT_CONFIRMED:
+            app.status = ApplicationStatus.APPROVED
+        else:
+            app.status = ApplicationStatus.TEACHER_CONFIRMED
     else:
         raise HTTPException(status_code=403, detail="Нет прав")
     db.commit()

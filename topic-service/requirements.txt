@@ -13,3 +13,6 @@ passlib[bcrypt]==1.7.4         # хэширование паролей
 
 # Удобства FastAPI
 python-multipart==0.0.9        # для форм (если будет регистрация с файлами)
+
+# HTTP-вызовы email-service
+httpx==0.27.2

@@ -46,6 +46,14 @@
     docker compose exec postgres psql -U postgres -d vkr_main -c "\dt"
     # Должна быть хотя бы таблица alembic_version.
 
+7. Запуск фронтенда:
+    
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    # После запуска откройте в браузере: http://localhost:5173
+
 ## Миграции topic-таблиц
 
 Таблицы `topics` и `applications` создаются миграцией auth-service (общая БД):
